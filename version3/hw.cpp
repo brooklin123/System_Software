@@ -14,12 +14,22 @@ using namespace std;
 struct midStructure {
     // Error type 有幾種沒確定
     // codeType 也沒確定
-    vector<bool> errorType(10, 0); // 0 mean no error -> 用bitwise就可以了!!
-    vector<bool> codeType(11, 0);  // 用bitwise!
-    string opcode;                 // hex
+    // 0: easy format
+    // 1: # 數字(十進位)
+    // 2: # label
+    // 3: @
+    // 4: ,x
+    // 5: +
+    vector<bool> errorType; // 0 mean no error -> 用bitwise就可以了!!
+    vector<bool> codeType;  // 用bitwise!
+    string opcode;          // hex
     int opcodeformat;
     string operand;
-    int loc; // 用10進位處理
+    int loc, line; // 用10進位處理
+    midStructure() {
+        this->errorType = vector<int>(11, 0);
+        this->codeType = vector<int>(11, 0);
+    }
 };
 
 class Scanner {
@@ -39,6 +49,7 @@ class Scanner {
     void printSymbolTable();
     void nixbpe(string);
     bool checkDecimal(string);
+    string removeFirstChar(string);
     map<string, int> SymbolTable;
     map<string, pair<int, string>> opcodetable;
     bool start, end; // 未出現 //出現兩次要報錯 (?)
@@ -50,6 +61,13 @@ Scanner::Scanner() {
     initOpcode();
     start = end = false;
     line = 1;
+}
+string Scanner::removeFirstChar(string str) {
+    string s = "";
+    for (int i = 1; i < str.size(); i++) {
+        s += str[i];
+    }
+    return s;
 }
 bool Scanner::checkDecimal(string str) {
     for (int j = 0; j < str.size(); j++) {
@@ -137,28 +155,6 @@ void Scanner::handleNextNewAddress(int kind, string val) { // not finish
     }
     return;
 }
-// return true : Index
-// return false : Direct
-// bool Scanner::DirectOrIndex(vector<string> vec) {
-//     bool hasComma = false, hasX = false;
-//     for (int i = 0; i < vec.size(); i++) {
-//         if (vec[i] == ".") {
-//             break; //後面不用看了
-//         }
-//         if (!hasComma) {
-//             if (vec[i].find(",") != string::npos) {
-//                 hasComma = true;
-//             }
-//         }
-//         //已找到, 接著找X
-//         if (hasComma and !hasX) {
-//             if (vec[i].find("X") != string::npos) {
-//                 hasX = true;
-//             }
-//         }
-//     }
-//     return (hasComma && hasX);
-// }
 void Scanner::printSymbolTable() {
     cout << "Symbol Table: {";
     auto i = SymbolTable.begin();
@@ -206,33 +202,47 @@ void Scanner::func(string str) {
     // 接下來 Check codeType 與errorType
     bool pesudo = false, error = false;
     bool findOpcode = false, findLabel = false, findOperand = false;
-
+    bool easyformat = true;
     // 先處理+opcdoe
     if (vec[1][0] = '+') {
-        string s = vec[1];
-        cout << "Type: extended format\n";
         //+ 拿掉，後把opcode 塞回去
-        vec[1] = "";
-        for (int i = 1; i < s.size(); i++) {
-            vec[1] += s[i];
-        }
-        cout << "finish extended opcode" << vec[1] << endl;
+        vec[1] = removeFirstChar(vec[i]);
+        tmp->codeType[5] = 1;
+        cout << "Type: extended; after removefirstChar:" << vec[1] << endl;
     }
 
     for (int i = 0; i < vec.size(); i++) {
         // / 如果RSUB . 不可以錯???? (有嗎)
         if (vec[i] == '.' && ((findOpcode && findOperand) || pesudo))
             break;
-        // 錯誤: 如果有: label 或 label ADD . 或 label RESB 1
-        if (vec[i] == '.' && !((findOpcode && findOperand) || pesudo)) {
-            cout << "about "." error!\n";
-            return;
-        }
+        // 錯誤: 如果有: label .或 label ADD .
+        // 應該要用opcode的format去判斷
+
         // 錯誤: 例如 label RESW 3 3 (第3是.已經被上面的做完了)
         if (pesudo) {
-            cout << "pesduo foramt\n";
+            cout << "error : pesduo foramt | e.g. label RESW 3 3 \n";
             return;
         }
+        if (vec[i] == '.') {
+            // RUSB .
+            if (tmp->opcodeformat == 1 && findOpcode) {
+                break;
+            }
+            // opcodeformat > 1
+            if (!findOpcode) {
+                cout << "error: not find opcode before annotation | e.g. label "
+                        ".\n";
+                return;
+            }
+
+            if (findOpcode && !findOperand) {
+                cout << "error: not find operand before annotation | e.g. "
+                        "label ADD ."
+            }
+            cout << "test .\n"; // 不知道有沒有沒想到的
+        }
+
+        // find label and opcode
         if (!findOpcode) {
             // label 不可與opcode 同名!
             if (!findLabel && !searchCode(vec[i])) {
@@ -242,10 +252,12 @@ void Scanner::func(string str) {
                 findOpcode = true;
                 tmp->opcodeformat = searchCode(vec[i]).first;
                 tmp->opcode = searchCode(vec[i]).second;
+                continue;
             } else { // !findopcode and findlabel => error
                 cout << "erorr format: not find opcode\n";
             }
         }
+
         string tmp_operand = "";
         // 處理pesudo 寫完，have not tested!!!!!!!!!!!
         if (vec[1] == "RESB" || vec[1] == "RESW" || vec[1] == "BYTE" ||
@@ -313,12 +325,68 @@ void Scanner::func(string str) {
             pesudo = true;
             i += 2; // 跳到vec[3]
         }           // have handle pesudo
+
         // operand
+        // not sure 有沒想到的
         if (findOpcode && !findOperand) {
-            // 各種codetype
-            pass;
+            if (vec[i].size() >= 2) {
+                //不可以 #@operand
+                if ((vec[i][0] == '@' && vec[i][1] == '#') ||
+                    (vec[i][1] == '@' && vec[i][0] == '#')) {
+                    cout << "operand error: @# or #@\n";
+                    return;
+                }
+                if (vec[i][0] == '#') {
+                    tmp->operand = removeFirstChar(vec[i]);
+                    if (checkDecimal(tmp->operand)) {
+                        tmp->codeType[1] = 1;
+                    } else {
+                        tmp->codeType[2] = 1;
+                    }
+                    easyformat = false;
+                }
+                if (vec[i][0] == '@') {
+                    tmp->operand = removeFirstChar(vec[i]);
+                    tmp->codeType[3] = 1;
+                    easyformat = false;
+                }
+                // ,X  (限只有一個,)
+                if (vec[i][vec[i].size() - 3] != ',' &&
+                    vec[i][vec[i].size() - 2] == ',' &&
+                    vec[i][vec[i].size() - 1] == 'X') {
+                    // ,X 不可與#、@ 一起出現
+                    if (easyformat) {
+                        easyformat = false;
+                        // remove last two char
+                        string s = "";
+                        for (int j = 0; j < vec[i].size() - 2; j++) {
+                            s += vec[i][j];
+                        }
+                        tmp->operand = s;
+                        tmp->codeType[3] = 1;
+                    } else { // 同時存在(# or @) 與 ,X
+                        cout << "opernad error: (# || @) and ,X\n";
+                        return;
+                    }
+                }
+                if (easyformat) {
+                    tmp->operand = vec[i];
+                    tmp->codeType[0] = 1;
+                }
+            }
+            // if vec[i].size() == 1 e.g. opernad = a
+            else {
+                if (vec[i][0] == '@' || vec[i][0] == ',' || vec[i][0] == '#') {
+                    cout << "operand error: when size() == 1 \n";
+                    return;
+                }
+                findOperand = true;
+                tmp->operand = vec[i];
+                tmp->codeType[2] = ; // easy format
+            }
         }
     }
+    // findoperand記得設!
     intermediate_file.push_back(tmp);
 }
 int main() {
@@ -342,4 +410,5 @@ int main() {
 // RSUB 沒有處理格式
 
 // 1. 註解
-//
+// 2. 重複symbol
+// 3 loc (handleNewAddr 前)、line
