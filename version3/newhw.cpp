@@ -49,7 +49,7 @@ class Scanner {
     string removeFirstChar(string);
     vector<string> removeAnnotation_Blank(string str);
     bool start, end; // 未出現 //出現兩次要報錯 (?)
-    int newAddressing, line, endAddress;
+    int newAddressing, line, programStartAddr, totalLen, startAddr;
     string program_name, filepath, baseRegister; // operand暫存在class中!
     vector<midStructure*> intermediate_file;
     unordered_map<string, int> SymbolTable;
@@ -160,7 +160,6 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
     line++;
     midStructure* tmp = new midStructure();
     string symbol = "", operand = "";
-    // cout << line << vec[0] << "!!!!!!!!!!";
     cout << "line: " << line << " ";
 
     // Pesudo
@@ -181,7 +180,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         // RESB
         if (vec[1] == "RESB") {
             if (checkDecimal(vec[2])) {
-                countLen_handleNextNewAddress(1, vec[2]);
+                tmp->len = countLen_handleNextNewAddress(1, vec[2]);
                 tmp->operand = vec[2]; //?
                 cout << "here1";
                 tmp->codeType[8] = true;
@@ -196,7 +195,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         // RESW
         else if (vec[1] == "RESW") {
             if (checkDecimal(vec[2])) {
-                countLen_handleNextNewAddress(2, vec[2]);
+                tmp->len = countLen_handleNextNewAddress(2, vec[2]);
                 tmp->operand = vec[2];
                 tmp->codeType[8] = true;
                 cout << "check RESW ";
@@ -227,7 +226,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                 }
                 cout << "check BYTE ";
                 tmp->operand = operand;
-                countLen_handleNextNewAddress(5, operand);
+                tmp->len = countLen_handleNextNewAddress(5, operand);
             }
             // e.g.:  X'F1'
             else if (vec[2][0] == 'X' && vec[2][1] == '\'' &&
@@ -245,7 +244,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                     }
                 }
                 tmp->operand = operand;
-                countLen_handleNextNewAddress(4, operand);
+                tmp->len = countLen_handleNextNewAddress(4, operand);
             } else {
                 errorQue.push(errorStructe(line, 6));
                 cout << "BYTE format error\n";
@@ -263,7 +262,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
             // check decimal
             if (checkDecimal(vec[2])) {
                 tmp->operand = vec[2];
-                countLen_handleNextNewAddress(3, vec[2]);
+                tmp->len = countLen_handleNextNewAddress(3, vec[2]);
             } else {
                 errorQue.push(errorStructe(line, 7));
                 cout << "WORD format error (decimal)\n";
@@ -274,12 +273,11 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         // Pesduo -- base
     } else if (vec.size() == 2 && vec[0] == "BASE") {
         baseRegister = vec[1];
-        //不要輸進operand!!
     }
     // Pesudo -- Start
     else if (vec.size() >= 2 && vec[1] == "START") {
         program_name = vec[0];
-        newAddressing = stoi(vec[2], nullptr, 16); //用10進位存
+        startAddr = newAddressing = stoi(vec[2], nullptr, 16); //用10進位存
         cout << "Program name is " << vec[0]
              << "startNewAddress: " << newAddressing << endl;
         start = true;
@@ -298,7 +296,9 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         if (SymbolTable.count(vec[1])) {
             end = true;
             cout << "END NAME: " << vec[1];
-            endAddress = SymbolTable[vec[1]];
+            programStartAddr = SymbolTable[vec[1]];
+            totalLen = newAddressing - startAddr;
+            cout << " totallen: " << totalLen;
         } else {
             errorQue.push(errorStructe(line, 9));
             cout << "error9 about (end+) symbol!";
