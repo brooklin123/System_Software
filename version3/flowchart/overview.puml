@@ -1,0 +1,25 @@
+@startuml
+scale 350 width
+[*] --> MainFunc
+
+state MainFunc{
+  建立opcodeTable_registerTable -->FirstPass
+  FirstPass --> SecondPass : 產生中間檔
+  SecondPass --> [*] : 產生object file
+  state FirstPass {
+    
+    讀取原始檔 --> 判斷程式的類別與錯誤
+    讀取原始檔 --> 所需資訊塞進中間檔
+    讀取原始檔 --> 建立symbolTable
+    }
+    state SecondPass{
+        組合opcode_nixbpe_label --> 產生objectFile
+        產生objectFile --> [*]
+    }
+
+}
+
+
+
+
+@enduml

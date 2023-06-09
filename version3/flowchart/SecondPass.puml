@@ -1,0 +1,9 @@
+@startuml
+' scale 350 width
+[*] --> SecondPass
+
+state SecondPass{
+    找BASE對應的lctr --> 設好baseRegister
+    設好baseRegister-->按種類算ni_xpbe
+    按種類算ni_xpbe  --> 組合
+}

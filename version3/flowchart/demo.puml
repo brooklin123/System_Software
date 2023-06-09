@@ -1,0 +1,17 @@
+@startuml
+title 測試用
+start
+while (讀取每一行原始程式) is(no empty)
+  
+  :测试某事;
+  if (發生錯誤) then (没有)
+    #palegreen:好的;
+    break;
+  endif
+  ->not ok;
+  :弹窗 "文本过长错误";
+endwhile
+->//合併步骤//;
+:"成功！";
+stop
+@endumls
