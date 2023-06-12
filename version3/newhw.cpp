@@ -428,7 +428,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
             vec[ptr] = removeFirstChar(vec[ptr]);
             if (opcodeTable.count(vec[ptr]) &&
                 opcodeTable[vec[ptr]].first == 3) {
-                normal = false;
+                // normal = false;
                 tmp->len = 4;
                 // tmp->codeType = 3;
                 tmp->opcode = opcodeTable[vec[ptr]].second;
@@ -460,6 +460,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
             tmp->ni = bitset<2>(string("01"));
             if (checkDecimal(tmp->operand)) {
                 tmp->codeType = 2;
+                tmp->operand = decimalToHex(stoi(tmp->operand));
             } else {
                 tmp->codeType = 3;
             }
@@ -578,15 +579,16 @@ string Scanner::generateObjectProgram(midStructure* tmp) {
             operand = tmp->operand;
         } else {
             operand = decimalToHex(SymbolTable[tmp->operand]);
+            cout << "operand of len4 :" << operand << endl;
         }
-        // cout << "[check gene len=4] ";
+        cout << "[check gene len=4] ";
         // cout << padString(2, hexPlusHex(tmp->opcode, ni)) + "1" +
         //             padString(5, operand);
         return padString(2, hexPlusHex(tmp->opcode, ni)) + "1" +
                padString(5, operand);
     }
     if (tmp->operand == "") {
-        // cout << "opeprand of RSUB: "
+        cout << "opeprand of RSUB: ";
         //      << padString(2, hexPlusHex(tmp->opcode, ni)) +
         //             padString(tmp->len * 2 - 2, "0");
         return padString(2, hexPlusHex(tmp->opcode, ni)) +
@@ -596,9 +598,9 @@ string Scanner::generateObjectProgram(midStructure* tmp) {
         if (tmp->codeType == 2) { // #(+數字)
             // e.g. COMP #3 -> (28+1) 00 03
             operand = tmp->operand;
-            // cout << "len = 3 and #num: "
-            //      << padString(2, hexPlusHex(tmp->opcode, ni)) + "0" +
-            //             padString(3, operand);
+            cout << "len = 3 and #num: ";
+            //  << padString(2, hexPlusHex(tmp->opcode, ni)) + "0" +
+            // padString(3, operand);
             return padString(2, hexPlusHex(tmp->opcode, ni)) + "0" +
                    padString(3, operand);
         }
@@ -611,15 +613,16 @@ string Scanner::generateObjectProgram(midStructure* tmp) {
         xbpe = s_xbpe.str();
         if (dispResult == "") { //沒有base
             errorQue.push(errorStructe(baseLine, 13));
+            cout << "no base\n";
             return "";
         }
         if (dispResult == "-1") {
+            cout << "disResult-1";
             errorQue.push(errorStructe(tmp->line, 13));
             return "";
         }
-        // cout << "(" << padString(2, hexPlusHex(tmp->opcode, ni)) << " " <<
-        // xbpe
-        //      << " " << padString(3, dispResult) << ")\n";
+        cout << "(" << padString(2, hexPlusHex(tmp->opcode, ni)) << " " << xbpe
+             << " " << padString(3, dispResult) << ")\n";
         return padString(2, hexPlusHex(tmp->opcode, ni)) + xbpe +
                padString(3, dispResult);
     }
