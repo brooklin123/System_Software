@@ -24,12 +24,13 @@ struct midStructure {
         this->operand = "";
         this->codeType = -1;
         this->len = 0;
+        this->line = 0;
     }
 };
 
-struct errorStructe {
+struct errorStructure {
     int line, errorType;
-    errorStructe(int l, int e) {
+    errorStructure(int l, int e) {
         this->line = l;
         this->errorType = e;
     }
@@ -49,8 +50,10 @@ class Scanner {
     void identifyCodeType_ErrorType(vector<string>&);
     void initErrorTable();
     bool checkDecimal(string);
+    bool checkHex(string);
     char intToHexChar(int);
     string decimalToHex(int);
+    string convertToLowerToUpper(string);
     string handleHexComplement(int);
     string getSubstringUntilFirstDot(string);
     string removeFirstChar(string);
@@ -70,7 +73,7 @@ class Scanner {
     unordered_map<string, pair<int, string>> opcodeTable;
     unordered_map<string, string> registerTable;
     // unordered_map<int, string> errorTable;
-    queue<errorStructe> errorQue;
+    queue<errorStructure> errorQue;
     unordered_map<int, string> errorTable;
     void printErrorQue();
 };
@@ -84,13 +87,12 @@ Scanner::Scanner() {
 void Scanner::initErrorTable() {
     errorTable[0] = "Program appears without START statement.";
     errorTable[1] = "Opcode is used as label in the pesudo code.";
-    errorTable[2] = "RESB format error: decimal value is not added after.";
-    errorTable[3] = "RESW format error: decimal value is not added after.";
+    errorTable[2] = "The values following RESB should be in decimal format.";
+    errorTable[3] = "The values following RESW should be in decimal format.";
     errorTable[4] = "BYTE error: 'C' is not followed by ASCII value.";
     errorTable[5] = "BYTE error: 'X' is not followed by HEX value.";
-    errorTable[6] =
-        "BYTE format does not match (X or C), missing ' ' or exceeding length.";
-    errorTable[7] = "WORD error: decimal value should be added after.";
+    errorTable[6] = "BYTE must be followed by 'X' or 'C'";
+    errorTable[7] = "The values following WORD should be in decimal format.";
     errorTable[8] = "Duplicate Symbol.";
     errorTable[9] = "Symbol after END statement is not found.";
     errorTable[10] = "END statement encountered but program continues.";
@@ -99,6 +101,15 @@ void Scanner::initErrorTable() {
     errorTable[12] = "mnemonic error";
     errorTable[13] = "Undefined symbol";
     errorTable[14] = "not find operand";
+    errorTable[15] = "START is followed by a non-hexadecimal address.";
+    errorTable[16] = "Not find END";
+    errorTable[17] = "Incorrect END format";
+    errorTable[18] = "Incorrect START format";
+    errorTable[19] = "The string enclosed by the single quotation mark is not "
+                     "in the correct format.";
+    errorTable[20] =
+        "An empty string is not allowed within the single quotation marks.";
+    errorTable[21] = "Program name is limited to 6 characters or fewer.";
 }
 char Scanner::intToHexChar(int i) {
     if (i >= 0 && i <= 9) {
@@ -150,13 +161,24 @@ bool Scanner::checkDecimal(string str) {
     }
     return true;
 }
+bool Scanner::checkHex(string str) {
+    for (char i : str) {
+        if (!isxdigit(i)) {
+            return false;
+        }
+    }
+    return true;
+}
 void Scanner::printErrorQue() {
     // 差: 查errorTable
     cout << "\nprintErrorQue: \n";
     int s = errorQue.size();
     for (int i = 0; i < s; i++) {
-        cout << errorTable[errorQue.front().errorType]
-             << " in line: " << errorQue.front().line << endl;
+        if (errorQue.front().line == -1)
+            cout << errorTable[errorQue.front().errorType] << endl;
+        else
+            cout << errorTable[errorQue.front().errorType]
+                 << " in line: " << errorQue.front().line << endl;
         errorQue.pop();
     }
 }
@@ -167,10 +189,8 @@ string Scanner::padString(int n, string str) {
         return paddedString;
     }
     if (str.size() == n) {
-        // cout << "str " << str << " == size<<" << n << "\n";
         return str;
     }
-    // cout << "str " << str << " over size<<" << n << "\n";
     return str;
 }
 string Scanner::removeFirstChar(string str) {
@@ -179,6 +199,16 @@ string Scanner::removeFirstChar(string str) {
         s += str[i];
     }
     return s;
+}
+string Scanner::convertToLowerToUpper(string input) {
+    std::string result;
+    for (char ch : input) {
+        if (ch >= 'a' && ch <= 'z') { // 判断是否为小写字母
+            ch = ch - 'a' + 'A';      // 转换为对应的大写字母
+        }
+        result += ch; // 添加到结果字符串
+    }
+    return result;
 }
 string Scanner::getSubstringUntilFirstDot(string str) {
     size_t dotIndex = str.find('.');
@@ -235,7 +265,6 @@ int Scanner::countLen_handleNextNewAddress(int kind, string val) {
     }
 }
 void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
-    // line++;
     midStructure* tmp = new midStructure();
     tmp->line = line;
     string symbol = "", operand = "";
@@ -246,12 +275,12 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         // label
         // label != opcodeName
         if (opcodeTable.count(vec[0])) {
-            errorQue.push(errorStructe(line, 1));
+            errorQue.push(errorStructure(line, 1));
             // cout << line << " error opcode: " << vec[0] << "\n";
             return;
 
         } else if (SymbolTable.count(vec[0])) {
-            errorQue.push(errorStructe(line, 8));
+            errorQue.push(errorStructure(line, 8));
             // cout << "error8 Duplicate Symbol\n";
             return;
         } else {
@@ -267,8 +296,8 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                 // cout << "[check RESB] ";
                 // return; // 不用insert進中間檔
             } else {
-                errorQue.push(errorStructe(line, 2));
-                cout << "error2: RESB format (decimal)\n";
+                errorQue.push(errorStructure(line, 2));
+                // cout << "error2: RESB format (decimal)\n";
                 return;
             }
         }
@@ -281,8 +310,8 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                 tmp->codeType = 0;
                 // cout << "[check RESW] ";
             } else {
-                errorQue.push(errorStructe(line, 3));
-                cout << "RESW format error (decimal)\n";
+                errorQue.push(errorStructure(line, 3));
+                // cout << "RESW format error (decimal)\n";
                 return;
             }
         }
@@ -290,13 +319,17 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         else if (vec[1] == "BYTE") {
             tmp->loc = newAddressing;
             // e.g.:  C'EOF'
-            if (vec[2][0] == 'C' && vec[2][1] == '\'' &&
+            if (vec.size() == 3 && vec[2][0] == 'C' && vec[2][1] == '\'' &&
                 vec[2][vec[2].size() - 1] == '\'') {
                 // check isAscii
+                if (vec[2].size() == 3) {
+                    errorQue.push(errorStructure(line, 20));
+                    return;
+                }
                 for (int j = 2; j < vec[2].size() - 1; j++) {
                     if (!isascii(vec[2][j])) {
-                        errorQue.push(errorStructe(line, 4));
-                        cout << "pesudo BYTE operand error!(ASCII)\n";
+                        errorQue.push(errorStructure(line, 4));
+                        // cout << "pesudo BYTE operand error!(ASCII)\n";
                         return;
                     } else {
                         // 強制類型轉換為整數
@@ -316,14 +349,17 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                     operand.size() / 2; // // 因為目前operand是翻成hex的ascii!
             }
             // e.g.:  X'F1'
-            else if (vec[2][0] == 'X' && vec[2][1] == '\'' &&
+            else if (vec.size() == 3 && vec[2][0] == 'X' && vec[2][1] == '\'' &&
                      vec[2][vec[2].size() - 1] == '\'') {
+                if (vec[2].size() == 3) {
+                    errorQue.push(errorStructure(line, 20));
+                    return;
+                }
                 // check hex
                 for (int j = 2; j < vec[2].size() - 1; j++) {
                     if (!((vec[2][j] >= '0' and vec[2][j] <= '9') ||
                           (vec[2][j] >= 'A' and vec[2][j] <= 'F'))) {
-                        errorQue.push(errorStructe(line, 5));
-                        cout << "pesudo BYTE operand error! (HEX)\n";
+                        errorQue.push(errorStructure(line, 5));
                         return;
                     } else {
                         operand += vec[2][j];
@@ -331,9 +367,11 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                     }
                 }
                 tmp->len = countLen_handleNextNewAddress(4, operand);
+            } else if (!(vec[2][0] == 'X' || vec[2][0] == 'C')) {
+                errorQue.push(errorStructure(line, 6));
+                return;
             } else {
-                errorQue.push(errorStructe(line, 6));
-                cout << "BYTE format error\n";
+                errorQue.push(errorStructure(line, 19));
                 return;
             }
             tmp->operand = operand;
@@ -347,10 +385,8 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                 tmp->operand = decimalToHex(stoi(vec[2]));
                 tmp->codeType = 1;
                 tmp->len = countLen_handleNextNewAddress(3, vec[2]);
-                // cout << "[check WORD] ";
             } else {
-                errorQue.push(errorStructe(line, 7));
-                cout << "WORD format error (decimal)\n";
+                errorQue.push(errorStructure(line, 7));
                 return;
             }
         }
@@ -364,44 +400,54 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         return;
     }
     // Pesudo -- Start
-    else if (vec.size() >= 2 && vec[1] == "START") {
+    else if (vec.size() == 1 && vec[0] == "START") {
+        errorQue.push(errorStructure(line, 18));
+        return;
+    } else if (vec.size() >= 2 && vec[1] == "START") {
+        if (vec.size() != 3) {
+            errorQue.push(errorStructure(line, 18));
+            return;
+        }
+        if (vec[0].size() > 6) {
+            errorQue.push(errorStructure(line, 21));
+        }
         program_name = vec[0];
+        if (!checkHex(vec[2])) {
+            errorQue.push(errorStructure(line, 15));
+            return;
+        }
         startAddr = newAddressing = stoi(vec[2], nullptr, 16); //用10進位存
         start = true;
         return;
     } else if (!start) {
-        errorQue.push(errorStructe(line, 0));
+        errorQue.push(errorStructure(line, 0));
         return;
     }
-
     // pesudo --END
     else if (end) {
-        errorQue.push(errorStructe(line, 10));
-        // cout << "end error : already end\n";
+        errorQue.push(errorStructure(line, 10));
         return;
-    } else if (vec.size() == 2 && !end && vec[0] == "END") {
-        // cout << " here end ";
+    } else if (vec.size() != 2 && vec[0] == "END") {
+        errorQue.push(errorStructure(line, 17));
+        return;
+    } else if (vec.size() == 2 && vec[0] == "END") {
         if (SymbolTable.count(vec[1])) {
             end = true;
             programStartAddr = SymbolTable[vec[1]];
             totalLen = newAddressing - startAddr;
-            // cout << "newAddressing" << newAddressing << " - startAddr"
-            //  << startAddr << "=  totallen: " << totalLen;
         } else {
-            errorQue.push(errorStructe(line, 9));
-            // cout << "error9 about (end+) symbol!";
+            errorQue.push(errorStructure(line, 9));
         }
         return;
     }
     // normal code!!
     else if (vec.size() == 1) {
-
         if (!opcodeTable.count(vec[0])) {
-            errorQue.push(errorStructe(line, 12));
+            errorQue.push(errorStructure(line, 12));
             return;
         }
         if (vec[0] != "RSUB" && opcodeTable[vec[0]].first != 1) {
-            errorQue.push(errorStructe(line, 14));
+            errorQue.push(errorStructure(line, 14));
             return;
         }
         tmp->len = opcodeTable[vec[0]].first;
@@ -417,7 +463,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                 SymbolTable[vec[0]] = newAddressing;
                 ptr = 1;
             } else {
-                errorQue.push(errorStructe(line, 8));
+                errorQue.push(errorStructure(line, 8));
                 return;
             }
         }
@@ -428,17 +474,16 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
             vec[ptr] = removeFirstChar(vec[ptr]);
             if (opcodeTable.count(vec[ptr]) &&
                 opcodeTable[vec[ptr]].first == 3) {
-                // normal = false;
                 tmp->len = 4;
-                // tmp->codeType = 3;
                 tmp->opcode = opcodeTable[vec[ptr]].second;
                 tmp->xbpe = tmp->xbpe.set(0); // 0001
             } else {
-                cout << "format error : happen +opcode\n";
+                errorQue.push(errorStructure(line, 12));
+                cout << line << " format error : happen +opcode\n";
             }
         } else {
             if (!opcodeTable.count(vec[ptr])) {
-                errorQue.push(errorStructe(line, 12));
+                errorQue.push(errorStructure(line, 12));
                 return;
             }
             tmp->len = opcodeTable[vec[ptr]].first;
@@ -451,7 +496,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         // LDA #0 、LDA #DATA
         // LDA @DATA
         if (ptr >= vec.size()) {
-            errorQue.push(errorStructe(line, 14));
+            errorQue.push(errorStructure(line, 14));
             return;
         }
         if (vec[ptr][0] == '#') {
@@ -485,30 +530,56 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                 }
                 tmp->operand = s;
                 tmp->codeType = 3;
-                tmp->xbpe = tmp->xbpe.set(3); //???
+                tmp->xbpe = tmp->xbpe.set(3);
+            }
+        }
+        if (vec.size() - 1 == ptr && vec[ptr][vec[ptr].size() - 1] == 'X' &&
+            vec[ptr][vec[ptr].size() - 2] == ',' &&
+            vec[ptr][vec[ptr].size() - 3] != ',') {
+            if (normal) {
+                normal = false;
+                string str = vec[ptr].substr(0, vec[ptr].size() - 2);
+                tmp->operand = str;
+                tmp->codeType = 3;
+                tmp->xbpe = tmp->xbpe.set(3);
             }
         }
         // 處理 e.g: LDA DATA 與 COMPR r1, r2
         if (normal) {
+            if (opcodeTable.count(vec[ptr])) {
+                errorQue.push(errorStructure(line, 11));
+                return;
+            }
             tmp->operand = vec[ptr];
             tmp->codeType = 3;
+            string r1 = "", r2 = "";
             // 處理COMPR r1, r2 (ptr目前指向r1,) 或CLEAR R1
             if (tmp->len == 2) {
-                // operand =  (r1)(r2)
-                // string r1 = 去掉','
-                string r1 = "";
-                if (vec[ptr][vec[ptr].size() - 1] == ',') {
-                    for (int i = 0; i < vec[ptr].size() - 1; i++) {
-                        r1 += vec[ptr][i];
-                    }
-                } else {
-                    r1 = vec[ptr];
-                }
-                tmp->reg.push_back(r1);
-                // 有r2
-                if (vec.size() - 1 == ptr + 1) {
-                    string r2 = vec[ptr + 1];
+                if (ptr == vec.size() - 1 &&
+                    vec[ptr].find(',') != std::string::npos) {
+                    size_t commaPos = vec[ptr].find(',');
+                    r1 = vec[ptr].substr(0, commaPos);
+                    r2 = vec[ptr].substr(commaPos + 1);
+                    tmp->reg.push_back(r1);
                     tmp->reg.push_back(r2);
+
+                } else {
+                    // operand =  (r1)(r2)
+                    // string r1 = 去掉','
+
+                    if (vec[ptr][vec[ptr].size() - 1] == ',') {
+                        for (int i = 0; i < vec[ptr].size() - 1; i++) {
+                            r1 += vec[ptr][i];
+                        }
+                    } else {
+                        r1 = vec[ptr];
+                    }
+                    tmp->reg.push_back(r1);
+                    // 有r2
+                    if (vec.size() - 1 == ptr + 1) {
+                        r2 = vec[ptr + 1];
+                        tmp->reg.push_back(r2);
+                    }
                 }
             }
         }
@@ -520,10 +591,14 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
     }
     // tmp->loc = newAddressing; // wrong 要在handlenewAddr前
     intermediate_file.push_back(tmp);
-    cout << " ni:" << tmp->ni << " xbpe: " << tmp->xbpe
-         << " operand: " << tmp->operand << " ctype:" << tmp->codeType
-         << " opcodenum:" << tmp->opcode << " len:" << tmp->len
-         << " loc:" << tmp->loc << " |" << endl;
+    // cout << "line:" << tmp->line << " ni:" << tmp->ni << " xbpe: " <<
+    // tmp->xbpe
+    //      << " operand: " << tmp->operand << " regs: ";
+    // for (int i = 0; i < tmp->reg.size(); i++) {
+    //     cout << tmp->reg[i] << " ";
+    // }
+    // cout << "ctype:" << tmp->codeType << " opcodenum:" << tmp->opcode
+    //      << " len:" << tmp->len << " loc:" << tmp->loc << " " << endl;
 }
 void Scanner::firstpass() {
     string inputStr;
@@ -538,17 +613,19 @@ void Scanner::firstpass() {
         if (vec.size() == 0)
             continue;
         // print all
-        for (int i = 0; i < vec.size(); i++) {
-            cout << "|" << vec[i];
-        }
-        cout << endl;
+        // for (int i = 0; i < vec.size(); i++) {
+        //     cout << "|" << vec[i];
+        // }
+        // cout << "size: " << vec.size() << endl;
         identifyCodeType_ErrorType(vec);
+    }
+    if (!end) {
+        errorQue.push(errorStructure(-1, 16));
     }
 }
 string Scanner::handleHexComplement(int n) {
     int decimalComplement = ~n + 1;
     string HexString = decimalToHex(decimalComplement);
-    cout << n << " -> hexS:" << HexString << endl;
     string str = "";
     string lastHexString = string(1, HexString.back());
     str = decimalToHex(16 - stoi(lastHexString, nullptr, 16));
@@ -563,7 +640,6 @@ string Scanner::handleHexComplement(int n) {
     string paddedString = str;
     // operand 都是3
     paddedString.insert(paddedString.begin(), 3 - str.size(), 'F');
-    cout << "Hexcomplement: " << paddedString << endl;
     return paddedString;
 }
 string Scanner::generateObjectProgram(midStructure* tmp) {
@@ -578,19 +654,19 @@ string Scanner::generateObjectProgram(midStructure* tmp) {
         if (tmp->codeType == 2) { // #(+數字)
             operand = tmp->operand;
         } else {
+            if (!SymbolTable.count(tmp->operand)) {
+                errorQue.push(errorStructure(baseLine, 13));
+                return "";
+            }
             operand = decimalToHex(SymbolTable[tmp->operand]);
-            cout << "operand of len4 :" << operand << endl;
         }
-        cout << "[check gene len=4] ";
+        // cout << "[check gene len=4] ";
         // cout << padString(2, hexPlusHex(tmp->opcode, ni)) + "1" +
         //             padString(5, operand);
         return padString(2, hexPlusHex(tmp->opcode, ni)) + "1" +
                padString(5, operand);
     }
     if (tmp->operand == "") {
-        cout << "opeprand of RSUB: ";
-        //      << padString(2, hexPlusHex(tmp->opcode, ni)) +
-        //             padString(tmp->len * 2 - 2, "0");
         return padString(2, hexPlusHex(tmp->opcode, ni)) +
                padString(tmp->len * 2 - 2, "0");
     }
@@ -598,40 +674,34 @@ string Scanner::generateObjectProgram(midStructure* tmp) {
         if (tmp->codeType == 2) { // #(+數字)
             // e.g. COMP #3 -> (28+1) 00 03
             operand = tmp->operand;
-            cout << "len = 3 and #num: ";
-            //  << padString(2, hexPlusHex(tmp->opcode, ni)) + "0" +
-            // padString(3, operand);
             return padString(2, hexPlusHex(tmp->opcode, ni)) + "0" +
                    padString(3, operand);
         }
-        // return  (opcode+ni)(xbpe)(operand)
         //大部分: xbpe == 1000 || xbpe ==  0000
         string dispResult = handleRelative(tmp);
-        // xbpe 要重算
         stringstream s_xbpe;
         s_xbpe << hex << tmp->xbpe.to_ulong();
         xbpe = s_xbpe.str();
         if (dispResult == "") { //沒有base
-            errorQue.push(errorStructe(baseLine, 13));
-            cout << "no base\n";
+            errorQue.push(errorStructure(baseLine, 13));
+            // cout << "no base\n";
             return "";
         }
         if (dispResult == "-1") {
-            cout << "disResult-1";
-            errorQue.push(errorStructe(tmp->line, 13));
+            // cout << "disResult-1";
+            errorQue.push(errorStructure(tmp->line, 13));
             return "";
         }
-        cout << "(" << padString(2, hexPlusHex(tmp->opcode, ni)) << " " << xbpe
-             << " " << padString(3, dispResult) << ")\n";
+        // cout << "(" << padString(2, hexPlusHex(tmp->opcode, ni)) << " " <<
+        // xbpe
+        //      << " " << padString(3, dispResult) << ")\n";
         return padString(2, hexPlusHex(tmp->opcode, ni)) + xbpe +
                padString(3, dispResult);
     }
     // format == 2 || format == 1  [r1 r2]
     // 還沒補0!!
-    cout << "check format ==2 || 1 regs: ";
     vector<string> regs = tmp->reg;
     for (int i = 0; i < regs.size(); i++) {
-        cout << regs[i] << " ";
         operand = operand + registerTable[regs[i]];
     }
     if (operand.size() < 2) {
@@ -647,17 +717,13 @@ string Scanner::handleRelative(midStructure* tmp) {
     int pc = tmp->loc + tmp->len;
     // PC relative
     int disp = operandAddr - pc;
-    // cout << "disp of pc: " << tmp->operand << "/" << operandAddr << " - " <<
-    // pc
-    //      << " = " << disp << " \n";
+    // cout << "\nline:" << tmp->line << " disp of pc-relative: " << operandAddr
+    //      << " - " << pc << " = " << disp << " ";
     if (disp >= 0 && disp <= 2047) {
-        // cout << "operand of pc: " << disp << endl;
         tmp->xbpe.set(1);
-        // cout << "xbpe!! " << tmp->xbpe << " ";
         return decimalToHex(disp);
     }
     if (disp < 0 && disp >= -2048) {
-        // cout << "=> twoComplememt: " << handleHexComplement(disp);
         tmp->xbpe.set(1);
         return handleHexComplement(disp);
     }
@@ -666,20 +732,22 @@ string Scanner::handleRelative(midStructure* tmp) {
         return "";
     }
     disp = operandAddr - baseAddr;
+    // cout << " base-relative: " << operandAddr << " - " << baseAddr << " = "
+    //      << disp << endl;
     if (disp >= 0 && disp <= 4095) {
         tmp->xbpe.set(2);
         return decimalToHex(disp);
     }
+    // cout << "line:" << tmp->line << " try base fail -> extended\n";
     // exetened
     return "0" + decimalToHex(operandAddr);
 }
 void Scanner::combineObjectProgram() {
     ofstream out("output.txt", ios::trunc); // 打開文本文件並清空內容
     if (out.is_open()) {                    // 確認文件是否成功打開
-        out << "H " << program_name << " "
-            << padString(6, decimalToHex(startAddr)) + " " +
-                   padString(6, decimalToHex(totalLen))
-            << endl;
+        out << convertToLowerToUpper(
+            "H " + program_name + " " + padString(6, decimalToHex(startAddr)) +
+            " " + padString(6, decimalToHex(totalLen)) + "\n");
         //讀中間檔
         int ctr = 0;
         string aPeiceOfObjectPorgam = " ",
@@ -688,12 +756,11 @@ void Scanner::combineObjectProgram() {
             midStructure* tmp = intermediate_file[i];
 
             if (ctr + tmp->len >= 30 && aPeiceOfObjectPorgam != "") {
-                out << "T " << padString(6, objectprogram_Startaddr) << "  "
-                    << padString(2, decimalToHex(ctr)) << "  "
-                    << aPeiceOfObjectPorgam << endl;
+                out << convertToLowerToUpper(
+                    "T " + padString(6, objectprogram_Startaddr) + "  " +
+                    padString(2, decimalToHex(ctr)) + "  " +
+                    aPeiceOfObjectPorgam + "\n");
                 ctr = 0;
-                // objectprogram_Startaddr = decimalToHex(tmp->loc);
-                // aPeiceOfObjectPorgam = "";
             }
             if (ctr == 0) {
                 objectprogram_Startaddr = decimalToHex(tmp->loc);
@@ -703,9 +770,10 @@ void Scanner::combineObjectProgram() {
             if (tmp->codeType == 0) {
                 // 把還沒輸出完的先印
                 if (aPeiceOfObjectPorgam != "") {
-                    out << "T " << padString(6, objectprogram_Startaddr) << " "
-                        << padString(2, decimalToHex(ctr)) << " "
-                        << aPeiceOfObjectPorgam << endl;
+                    out << convertToLowerToUpper(
+                        "T " + padString(6, objectprogram_Startaddr) + "  " +
+                        padString(2, decimalToHex(ctr)) + "  " +
+                        aPeiceOfObjectPorgam + "\n");
                     ctr = 0;
                     aPeiceOfObjectPorgam = "";
                 }
@@ -719,19 +787,21 @@ void Scanner::combineObjectProgram() {
                 continue;
             } else {
                 string genstring = generateObjectProgram(tmp);
-                cout << "\n(" << tmp->line
-                     << ") is a middle line: " << genstring << endl;
+                // cout << "\n(" << tmp->line
+                //      << ") is a middle line: " << genstring << endl;
                 aPeiceOfObjectPorgam += genstring + " ";
                 ctr += tmp->len;
             }
         }
         // leave
         if (aPeiceOfObjectPorgam != "") {
-            out << "T " << padString(6, objectprogram_Startaddr) << "  "
-                << padString(2, decimalToHex(ctr)) << "  "
-                << aPeiceOfObjectPorgam << endl;
+            out << convertToLowerToUpper(
+                "T " + padString(6, objectprogram_Startaddr) + "  " +
+                padString(2, decimalToHex(ctr)) + "  " + aPeiceOfObjectPorgam +
+                "\n");
         }
-        out << "E " << padString(6, decimalToHex(programStartAddr));
+        out << convertToLowerToUpper(
+            "E " + padString(6, decimalToHex(programStartAddr)));
         out.close();
     } else {
         cout << "cannot open outputFile" << endl;
@@ -748,7 +818,7 @@ void Scanner::secondpass() {
     if (!errorQue.empty()) {
         printErrorQue();
     } else {
-        cout << endl;
+        // cout << endl;
         ifstream in("output.txt");
         if (in.is_open()) {
             string outputLine;
@@ -764,7 +834,6 @@ void Scanner::secondpass() {
 void Scanner::func(string filepath) {
     this->filepath = filepath;
     firstpass();
-    cout << "\n~~~~~~~~secondPass~~~~~~\n";
     secondpass();
 }
 int main() {
