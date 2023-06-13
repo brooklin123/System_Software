@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iterator>
 #include <queue>
+#include <set>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -49,6 +50,7 @@ class Scanner {
     int countLen_handleNextNewAddress(int, string);
     void identifyCodeType_ErrorType(vector<string>&);
     void initErrorTable();
+    void init_format2RegNum();
     bool checkDecimal(string);
     bool checkHex(string);
     char intToHexChar(int);
@@ -75,14 +77,28 @@ class Scanner {
     // unordered_map<int, string> errorTable;
     queue<errorStructure> errorQue;
     unordered_map<int, string> errorTable;
+    set<string> format2_2reg;
+    set<string> format2_1reg;
     void printErrorQue();
 };
 Scanner::Scanner() {
     initOpcode();
     initRegesterCode();
     initErrorTable();
+    init_format2RegNum();
     start = end = base = false;
     line = 0;
+}
+void Scanner::init_format2RegNum() {
+    string two_reg[] = {"ADDR", "CLEAR",  "COMPR",  "DIVR", "MULR",
+                        "RMO",  "SHIFTL", "SHIFTR", "SUBR"};
+    string one_reg[] = {"CLEAR", "SVC", "TD", "TIXR"};
+    for (string a : two_reg) {
+        format2_2reg.insert(opcodeTable[a].second);
+    }
+    for (string b : one_reg) {
+        format2_1reg.insert(opcodeTable[b].second);
+    }
 }
 void Scanner::initErrorTable() {
     errorTable[0] = "Program appears without START statement.";
@@ -110,6 +126,7 @@ void Scanner::initErrorTable() {
     errorTable[20] =
         "An empty string is not allowed within the single quotation marks.";
     errorTable[21] = "Program name is limited to 6 characters or fewer.";
+    errorTable[22] = "error about regester number";
 }
 char Scanner::intToHexChar(int i) {
     if (i >= 0 && i <= 9) {
@@ -410,6 +427,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         }
         if (vec[0].size() > 6) {
             errorQue.push(errorStructure(line, 21));
+            return;
         }
         program_name = vec[0];
         if (!checkHex(vec[2])) {
@@ -557,21 +575,37 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
             if (tmp->len == 2) {
                 if (ptr == vec.size() - 1 &&
                     vec[ptr].find(',') != std::string::npos) {
-                    size_t commaPos = vec[ptr].find(',');
-                    r1 = vec[ptr].substr(0, commaPos);
-                    r2 = vec[ptr].substr(commaPos + 1);
-                    tmp->reg.push_back(r1);
-                    tmp->reg.push_back(r2);
-
+                    if (format2_2reg.count(tmp->opcode)) {
+                        size_t commaPos = vec[ptr].find(',');
+                        r1 = vec[ptr].substr(0, commaPos);
+                        r2 = vec[ptr].substr(commaPos + 1);
+                        tmp->reg.push_back(r1);
+                        tmp->reg.push_back(r2);
+                    } else {
+                        cout << "regerror1";
+                        errorQue.push(errorStructure(line, 22));
+                        return;
+                    }
                 } else {
                     // operand =  (r1)(r2)
                     // string r1 = 去掉','
-
                     if (vec[ptr][vec[ptr].size() - 1] == ',') {
-                        for (int i = 0; i < vec[ptr].size() - 1; i++) {
-                            r1 += vec[ptr][i];
+                        if (format2_2reg.count(tmp->opcode)) {
+                            for (int i = 0; i < vec[ptr].size() - 1; i++) {
+                                r1 += vec[ptr][i];
+                            }
+                        } else {
+                            cout << "regerror2";
+                            errorQue.push(errorStructure(line, 22));
+                            return;
                         }
+                        //沒有,
                     } else {
+                        if (!format2_1reg.count(tmp->opcode)) {
+                            cout << "regerror3";
+                            errorQue.push(errorStructure(line, 22));
+                            return;
+                        }
                         r1 = vec[ptr];
                     }
                     tmp->reg.push_back(r1);
