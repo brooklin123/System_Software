@@ -1,0 +1,27 @@
+@startuml
+start
+    :設operandAddr = 
+    查symbolTable得operand的位置;
+    :設pcAddr = 
+    此midStruct的loc + midStruct的長度;
+    :設disp = operandAdrr - pcAddr;
+    if(disp 介於0 到2047) then (true)
+        :將xbpe的p設1;
+        :回傳 轉hex的disp;
+        stop
+    elseif (disp 介於-2048 到0) then (true)
+        : 將xbpe的p設1;
+        : 將disp轉成16補數;
+        : 回傳disp;
+        stop
+    endif
+    :設 disp = operandAddr - baseAddr;
+    if(disp 介於0到4095) then (true)
+        : 將xbpe的b設1;
+        : 回傳 轉hex的disp;
+        stop
+    endif
+    :回傳operandAddr;
+    note left:當作extend format
+stop
+@enduml

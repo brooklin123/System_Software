@@ -1,0 +1,29 @@
+@startuml
+title 將中間檔組合起來()
+start
+:將H record設好 塞進output.txt裡;
+while (讀取中間檔每一個midStruct) is (no empty)
+  if(累積objectProgram長度加入
+  此midStruct的長度超過30) then(true)
+    :將累積objectProgram塞進output.txt裡;
+    :設累積objectProgram長度 = 0;
+    :累積objectProgram = "";
+  endif
+  if(累積objectProgram長度 == 0) then (true)
+    :設累積objectProgram的起始位置為此midStruct的loc;
+  endif
+  if(midStruct的種類為有RESB或RESW的虛指令) then (true)
+    : 將非空的累積objectProgram塞進output.txt裡;
+    : 設累積objectProgram長度 = 0;
+    : 累積objectProgram = "";
+  elseif(midStruct的種類為有RESB或RESW的虛指令) then (true)
+    : 累積objectProgram長度 += 此midStruct的長度;
+    : 累積objectProgram +此midStruct的operand;
+  else (其餘)
+    : 累積objectProgram長度 += 此midStruct的長度;
+    : 累積objectProgram += generatObjectProgram(midStruct*);
+  endif
+endwhile
+:將非空的累積objectProgram塞進output.txt裡;
+stop
+@enduml

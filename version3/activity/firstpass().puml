@@ -1,0 +1,11 @@
+@startuml
+title FirstPass()
+start
+while (讀取每一行原始程式) is(no empty)
+  :刪掉註解以後的文字;
+  :按空白做切割成vector<string>;
+  :identifyCodeType_ErrorType(vector<string>);
+  note left: 判斷label、symbol、operand;
+endwhile
+stop
+@endumls

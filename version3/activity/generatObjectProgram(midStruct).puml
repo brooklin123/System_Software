@@ -1,0 +1,41 @@
+@startuml
+title generateObjectObjecyProgram()
+start
+if(此midStruct長度 == 4) then (true)
+    if(midStruct種類是#加數字) then (true)
+        :operand 設為 midStruct的operand;
+    else (false)
+        :operand 設為 
+        能查詢到的operand 
+        的所在位置;
+    endif
+    : 組合字串 = 
+    (opcode+ni) + xbpe + operand;
+    : 回傳組合字串;
+    stop
+' endif
+elseif (operand沒有值) then (true)
+    : 組合字串 = (opcode+ni) + 
+    xbpe + ((此operand長度*2-2)個'0');
+    : 回傳組合字串;
+    stop
+' endif
+elseif(此midStruct長度 == 3) then (true)
+    if(midStruct種類是#加數字) then (true)
+        :operand 設為 midStruct的operand;
+        : 組合字串 = 
+        (opcode+ni) + xbpe + operand;
+        : 回傳組合字串;
+        stop
+    endif
+    :設disp = handleRelative(mideStruct*);
+    :組合字串 = (opcode+ni) + xbpe + disp;
+    :回傳組合字串;
+    stop
+else (剩下為midStruct的長度 == 2 或 1)
+: operand = 逐一查operand 
+對應於registerTable的代號;
+: 組合字串 = opcode + operand;
+: 回傳組合字串;
+stop
+@enduml

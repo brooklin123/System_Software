@@ -1,0 +1,51 @@
+@startuml
+title identifyCodeType_ErrorType(vector<string>vec)
+start
+:建立midStruct;
+if(有REDB、RESW、BYTE、WORD且vec.size() == 3) then (true)
+    :紀錄label進symbolTable裡
+    :紀錄種類、長度、operand、
+    原始的行數進midStruct;
+    :將虛指令長度加入location counter;
+elseif (有START) then (true)
+    :存program_name與startAddr與loc起始位置;
+    stop
+elseif(有END) then (true)
+    :存programStartAddr與程式全部長度;
+    stop
+elseif(還沒START 或是已經END了) then (true)
+    :紀錄錯誤;
+    stop
+elseif(有base) then (true)
+    :存base的symbol與原始行數;
+    stop
+
+elseif(長度為1 且是vec[0]為opcode) then (true)
+    :紀錄opcode、種類、長度、loc、
+    原始行數、xi、xbpe 進midStruct;
+    :將指令長度加進location counter;
+elseif(長度為2到4的非虛指令) then (true)
+    if(有label) then (true)
+    :紀錄進symbolTable裡;
+    endif
+    if(opcode format == 1 或 opcdoe 等於RSUB) then (true)
+    :紀錄opcode、種類、長度、loc、
+    原始行數進midStruct;
+    if(opcode format == 2) then (true)
+    :根據opcode的register數量塞進reg
+    :紀錄opcode、種類、長度、loc、
+    原始行數進midStruct;
+    else (opcode format == 3)
+    :根據有無@、#、,X, +, 無前四種 區分定址模式;
+    :紀錄opcode、operand、種類、長度、loc、
+    原始行數、xi、xbpe 進midStruct;
+    :將指令長度加進location counter;
+    endif
+else (皆是錯誤)
+    :紀錄錯誤;
+    stop
+endif
+:塞進中間檔;
+stop
+
+@endumls

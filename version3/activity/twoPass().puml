@@ -1,0 +1,13 @@
+@startuml
+title PassTwo()
+start
+:設baseAddr;
+:將中間檔的資訊組合起來();
+
+if(紀錄錯誤的queue非空) then (true)
+  :印出錯誤;
+else (false)
+  :印出objectProgram;
+endif
+stop
+@enduml

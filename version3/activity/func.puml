@@ -1,0 +1,7 @@
+@startuml
+title func()
+start
+:PassOne();
+:PassTwo();
+stop
+@endumls
