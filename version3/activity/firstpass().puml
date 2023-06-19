@@ -1,5 +1,7 @@
 @startuml
-title FirstPass()
+title PassOne()
+scale 1024 width
+scale 500 height
 start
 while (讀取每一行原始程式) is(no empty)
   :刪掉註解以後的文字;

@@ -21,7 +21,6 @@ start
         : 回傳 轉hex的disp;
         stop
     endif
-    :回傳operandAddr;
-    note left:當作extend format
+    :報錯;
 stop
 @enduml

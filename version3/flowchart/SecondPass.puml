@@ -4,6 +4,7 @@
 
 state SecondPass{
     找BASE對應的lctr --> 設好baseRegister
-    設好baseRegister-->按種類算ni_xpbe
-    按種類算ni_xpbe  --> 組合
+    設好baseRegister--> 讀中間檔的每一個物件
+    讀中間檔的每一個物件 --> 看物件的種類算ni_xpbe兼組好_唯一錯誤就是duplicatedSymbol
+    看物件的種類算ni_xpbe兼組好_唯一錯誤就是duplicatedSymbol--> 如果errorQue非空就印錯誤訊息_如果是空的_滿30或遇到RESW_RESB就印出objectProgram 
 }

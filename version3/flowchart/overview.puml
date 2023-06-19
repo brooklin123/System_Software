@@ -3,13 +3,15 @@ scale 350 width
 [*] --> MainFunc
 
 state MainFunc{
-  建立opcodeTable_registerTable -->FirstPass
+  建立opcodeTable -->FirstPass
+  建立registerTable -->FirstPass
+  建立ErrorTable -->FirstPass
   FirstPass --> SecondPass : 產生中間檔
   SecondPass --> [*] : 產生object file
   state FirstPass {
     
     讀取原始檔 --> 判斷程式的類別與錯誤
-    讀取原始檔 --> 所需資訊塞進中間檔
+    判斷程式的類別與錯誤 --> 所需資訊塞進中間檔
     讀取原始檔 --> 建立symbolTable
     }
     state SecondPass{

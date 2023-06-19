@@ -3,10 +3,10 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
-#include <map>
 #include <pair>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace std;
@@ -44,14 +44,16 @@ class Scanner {
   private:
     void handleNextNewAddress(int, string);
     void initOpcode();
+    void intiRegesterCode();
     string decimalToHex(int);
     char intToHexChar(int);
     void printSymbolTable();
     void nixbpe(string);
     bool checkDecimal(string);
     string removeFirstChar(string);
-    map<string, int> SymbolTable;
-    map<string, pair<int, string>> opcodetable;
+    unordered_map<string, int> SymbolTable;
+    unordered_map<string, pair<int, string>> opcodetable; // format, opcodeVal
+    unordered_map<string, char> registerTable;
     bool start, end; // 未出現 //出現兩次要報錯 (?)
     int newAddressing, line;
     string program_name, operand; // operand暫存在class中!
@@ -59,6 +61,8 @@ class Scanner {
 };
 Scanner::Scanner() {
     initOpcode();
+
+    intiRegesterCode();
     start = end = false;
     line = 1;
 }
@@ -111,6 +115,13 @@ void Scanner::initOpcode() {
         opcodetable[mnem] = make_pair(format, opcode);
     }
     in.close();
+}
+void Scanner::intiRegesterCode() {
+    string name[] = {"A", "X", "L", "B", "S", "T", "F", "PC", "SW"};
+    char val[] = {'0', '1', '2', '3', '4', '5', '6', '8', '9'};
+    for (int i = 0; i < 9; i++) {
+        registerTable[name[i]] = val[i];
+    }
 }
 void Scanner::insertSymbolTable(string label) {
     if (!SymbolTable.count(label)) {
@@ -177,10 +188,10 @@ void Scanner::func(string str) {
                        istream_iterator<string>());
 
     // why要這行??
-    if (vec[0].find("RSUB.") == string::npos &&
-        vec[0].find(".") != string::npos) {
-        return;
-    }
+    // if (vec[0].find("RSUB.") == string::npos &&
+    //     vec[0].find(".") != string::npos) {
+    //     return;
+    // }
     //處理start的虛指令
     if (!start && str.find("START") != string::npos) {
         // 待check format!
@@ -203,6 +214,7 @@ void Scanner::func(string str) {
     bool pesudo = false, error = false;
     bool findOpcode = false, findLabel = false, findOperand = false;
     bool easyformat = true;
+    // ??
     // 先處理+opcdoe
     if (vec[1][0] = '+') {
         //+ 拿掉，後把opcode 塞回去
@@ -289,10 +301,12 @@ void Scanner::func(string str) {
                             cout << "pesudo BYTE operand error!(ASCII)\n";
                             return;
                         } else {
+                            stringstream hexAscii;
                             // 強制類型轉換為整數
                             int AsciiCode = static_cast<int>(vec[2][j]);
-                            string str_asciiCode = to_string(AsciiCode);
-                            tmp_operand += str_asciiCode;
+                            // string str_asciiCode = to_string(AsciiCode);
+                            hexAscii << hex << AsciiCode;
+                            tmp_operand += hexAscii.str();
                         }
                     }
                     tmp->operand = tmp_operand;
@@ -400,10 +414,6 @@ int main() {
     return 0;
 }
 // // 發現第二次start (但還需要end已出現)
-// if (start && str.find("start")) {
-//     cout << "wrong!\n";
-//     return;
-// }
 
 //　Base 要跳過，還沒處理
 // 沒處理 . 黏在字串的左邊、右邊

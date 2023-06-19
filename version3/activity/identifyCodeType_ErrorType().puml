@@ -2,11 +2,14 @@
 title identifyCodeType_ErrorType(vector<string>vec)
 start
 :建立midStruct;
-if(有REDB、RESW、BYTE、WORD且vec.size() == 3) then (true)
+if(有RESB、RESW、BYTE、WORD且vec.size() == 3) then (true)
     :紀錄label進symbolTable裡
     :紀錄種類、長度、operand、
     原始的行數進midStruct;
+    noteleft: 種類==1 代表是pesudo
     :將虛指令長度加入location counter;
+    noteleft: "RESB"   : +operand (decimal), "RESW": stoi(operand) * 3 
+    noteleft: "WORD"+3  "BYTE" X : +1 "BYTE" C : +operand.size() 
 elseif (有START) then (true)
     :存program_name與startAddr與loc起始位置;
     stop
@@ -20,10 +23,18 @@ elseif(有base) then (true)
     :存base的symbol與原始行數;
     stop
 
-elseif(長度為1 且是vec[0]為opcode) then (true)
+elseif(vec長度為1 且是vec[0]為opcode 或RSUB出錯情況(即報錯)) then (true)
     :紀錄opcode、種類、長度、loc、
     原始行數、xi、xbpe 進midStruct;
     :將指令長度加進location counter;
+elseif(vec長度為2 且 vec[0]是RSUB或format為1的opcdoe 且 vec[1] 是vec[1]是RSUB或format為1的opcdoe) then (true)
+    if(vec[1] 是vec[1]是RSUB或format為1的opcdoe) then (true)
+        :報錯;
+        stop
+    endif
+    :紀錄opcode、種類、長度、loc、原始行數進midStruct;
+    :將指令長度加進location counter;
+    noteleft:對的label opcode1 ,錯的:opcode1 operand1
 elseif(長度為2到4的非虛指令) then (true)
     if(有label) then (true)
     :紀錄進symbolTable裡;
@@ -31,6 +42,7 @@ elseif(長度為2到4的非虛指令) then (true)
     if(opcode format == 1 或 opcdoe 等於RSUB) then (true)
     :紀錄opcode、種類、長度、loc、
     原始行數進midStruct;
+    endif
     if(opcode format == 2) then (true)
     :根據opcode的register數量塞進reg
     :紀錄opcode、種類、長度、loc、

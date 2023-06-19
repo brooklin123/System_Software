@@ -1,0 +1,19 @@
+PROG START 000   .comment
+TEST LDCH BUFFER, X         . comment
+	STA	DATA, X
+	RSUB		. comment
+TEST1 J @DATA
+J @DATA
++LDA #3
+LDA	 DATA
+TEST2 LDA #3
++LDB  #DATA  .6910 +(DATA) 
+COMPR A, X
+CLEAR B
+DATA	RESB	5	.comment
+BUFFER	RESW	50
+DATA3	WORD	17   . 要轉成hex
+DATA4   BYTE    X'F1'
+DATA5   BYTE    C'EYES'
+	END	TEST1
+

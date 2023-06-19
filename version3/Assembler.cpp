@@ -16,6 +16,11 @@ struct midStructure {
     bitset<4> xbpe;
     bitset<2> ni;
     string opcode, operand;
+    // codeType
+    // 0 : pesduo
+    // 1 : WORD或BYTE(這得operand都是轉好的(hex與ascii對應的hex))
+    // 2: #(+數字)
+    // 3 : other
     int loc, len, line, codeType;
     vector<string> reg; // 存當operand 是register時用
     midStructure() {
@@ -36,9 +41,9 @@ struct errorStructure {
         this->errorType = e;
     }
 };
-class Scanner {
+class Assembler {
   public:
-    Scanner();
+    Assembler();
     void func(string);
 
   private:
@@ -46,10 +51,11 @@ class Scanner {
     void initRegesterCode();
     void firstpass();
     void secondpass();
-    void combineObjectProgram();
-    int countLen_handleNextNewAddress(int, string);
-    void identifyCodeType_ErrorType(vector<string>&);
+    void generateObjectProgram();
     void initErrorTable();
+    void printErrorQue();
+    void identifyCodeType_ErrorType(vector<string>&);
+    int countLen_handleNextNewAddress(int, string);
     void init_format2RegNum();
     bool checkDecimal(string);
     bool checkHex(string);
@@ -59,38 +65,37 @@ class Scanner {
     string handleHexComplement(int);
     string getSubstringUntilFirstDot(string);
     string removeFirstChar(string);
-    string generateObjectProgram(midStructure*); // 處理1 #num 與 (op r1) (op )
+    string generateObjectCode(midStructure*); // 處理1 #num 與 (op r1) (op )
     string handleRelative(midStructure*);
     vector<string> removeAnnotation_Blank(string str);
     string hexPlusHex(string, string);
     string padString(int, string);
 
-    bool start, end, base; // 未出現 //出現兩次要報錯 (?)
-    int newAddressing, line, programStartAddr, totalLen, startAddr, baseAddr,
-        baseLine;                               // decimal!
-    string program_name, filepath, baseOperand; // operand暫存在class中!
+    bool isStart, isEnd, isBase; // 是否出現
+    int locationCounter, line, programStartAddr, totalLen, startAddr, baseAddr,
+        baseLine; // decimal!
+    string program_name, filepath, baseOperand;
     vector<midStructure*> intermediate_file;
-    unordered_map<string, int> SymbolTable;
-    // mnem <format, opcodeNum>
-    unordered_map<string, pair<int, string>> opcodeTable;
-    unordered_map<string, string> registerTable;
-    // unordered_map<int, string> errorTable;
     queue<errorStructure> errorQue;
-    unordered_map<int, string> errorTable;
+    unordered_map<string, int> SymbolTable;
     set<string> format2_2reg;
     set<string> format2_1reg;
-    void printErrorQue();
+    // key: mnem  val: <format, opcodeNum>
+    unordered_map<string, pair<int, string>> opcodeTable;
+    unordered_map<string, string> registerTable;
+    unordered_map<int, string> errorTable;
 };
-Scanner::Scanner() {
+Assembler::Assembler() {
     initOpcode();
     initRegesterCode();
     initErrorTable();
     init_format2RegNum();
-    start = end = base = false;
+    isStart = isEnd = isBase = false;
     line = 0;
 }
-void Scanner::init_format2RegNum() {
-    string two_reg[] = {"ADDR", "CLEAR",  "COMPR",  "DIVR", "MULR",
+// 建表 處理 format為2的opcode後所需的參數數量
+void Assembler::init_format2RegNum() {
+    string two_reg[] = {"ADDR", "COMPR",  "DIVR",   "MULR",
                         "RMO",  "SHIFTL", "SHIFTR", "SUBR"};
     string one_reg[] = {"CLEAR", "SVC", "TD", "TIXR"};
     for (string a : two_reg) {
@@ -100,7 +105,7 @@ void Scanner::init_format2RegNum() {
         format2_1reg.insert(opcodeTable[b].second);
     }
 }
-void Scanner::initErrorTable() {
+void Assembler::initErrorTable() {
     errorTable[0] = "Program appears without START statement.";
     errorTable[1] = "Opcode is used as label in the pesudo code.";
     errorTable[2] = "The values following RESB should be in decimal format.";
@@ -127,8 +132,13 @@ void Scanner::initErrorTable() {
         "An empty string is not allowed within the single quotation marks.";
     errorTable[21] = "Program name is limited to 6 characters or fewer.";
     errorTable[22] = "error about regester number";
+    errorTable[23] = "RSUB does not have an operand";
+    errorTable[24] = "size of contend in BYTE C'' is over 30";
+    errorTable[25] = "size of contend in BYTE X'' is over 60";
+    errorTable[26] = "format 1 is not allowed with operand";
+    errorTable[27] = "over the range of base";
 }
-char Scanner::intToHexChar(int i) {
+char Assembler::intToHexChar(int i) {
     if (i >= 0 && i <= 9) {
         return '0' + i;
     } else if (i >= 10 && i <= 15) {
@@ -137,7 +147,7 @@ char Scanner::intToHexChar(int i) {
         return '0';
     }
 }
-string Scanner::decimalToHex(int decimal) {
+string Assembler::decimalToHex(int decimal) {
     string hex = "";
     while (decimal > 0) {
         int remainder = decimal % 16;
@@ -149,7 +159,7 @@ string Scanner::decimalToHex(int decimal) {
     }
     return hex;
 }
-void Scanner::initOpcode() {
+void Assembler::initOpcode() {
     ifstream in;
     in.open("opcode.txt");
     if (in.fail()) {
@@ -163,14 +173,14 @@ void Scanner::initOpcode() {
     }
     in.close();
 }
-void Scanner::initRegesterCode() {
+void Assembler::initRegesterCode() {
     string name[] = {"A", "X", "L", "B", "S", "T", "F", "PC", "SW"};
     string val[] = {"0", "1", "2", "3", "4", "5", "6", "8", "9"};
     for (int i = 0; i < 9; i++) {
         registerTable[name[i]] = val[i];
     }
 }
-bool Scanner::checkDecimal(string str) {
+bool Assembler::checkDecimal(string str) {
     for (int j = 0; j < str.size(); j++) {
         if ((str[j] < '0' || str[j] > '9')) {
             return false;
@@ -178,7 +188,7 @@ bool Scanner::checkDecimal(string str) {
     }
     return true;
 }
-bool Scanner::checkHex(string str) {
+bool Assembler::checkHex(string str) {
     for (char i : str) {
         if (!isxdigit(i)) {
             return false;
@@ -186,7 +196,7 @@ bool Scanner::checkHex(string str) {
     }
     return true;
 }
-void Scanner::printErrorQue() {
+void Assembler::printErrorQue() {
     // 差: 查errorTable
     cout << "\nprintErrorQue: \n";
     int s = errorQue.size();
@@ -199,7 +209,7 @@ void Scanner::printErrorQue() {
         errorQue.pop();
     }
 }
-string Scanner::padString(int n, string str) {
+string Assembler::padString(int n, string str) {
     if (str.size() < n) {
         string paddedString = str;
         paddedString.insert(paddedString.begin(), n - str.size(), '0');
@@ -210,14 +220,14 @@ string Scanner::padString(int n, string str) {
     }
     return str;
 }
-string Scanner::removeFirstChar(string str) {
+string Assembler::removeFirstChar(string str) {
     string s = "";
     for (int i = 1; i < str.size(); i++) {
         s += str[i];
     }
     return s;
 }
-string Scanner::convertToLowerToUpper(string input) {
+string Assembler::convertToLowerToUpper(string input) {
     std::string result;
     for (char ch : input) {
         if (ch >= 'a' && ch <= 'z') { // 判断是否为小写字母
@@ -227,21 +237,21 @@ string Scanner::convertToLowerToUpper(string input) {
     }
     return result;
 }
-string Scanner::getSubstringUntilFirstDot(string str) {
+string Assembler::getSubstringUntilFirstDot(string str) {
     size_t dotIndex = str.find('.');
     if (dotIndex != string::npos) {
         return str.substr(0, dotIndex);
     }
     return str;
 }
-vector<string> Scanner::removeAnnotation_Blank(string str) {
+vector<string> Assembler::removeAnnotation_Blank(string str) {
     // 將字串根據空白拆開，塞進vector裡
     istringstream iss(str); // C++風格的串流的输入操作
     vector<string> vec(istream_iterator<string>{iss},
                        istream_iterator<string>());
     return vec;
 }
-string Scanner::hexPlusHex(string s1, string s2) {
+string Assembler::hexPlusHex(string s1, string s2) {
     // 將十六進位數字轉換為整數
     stringstream ss;
     ss << hex << s1;
@@ -259,33 +269,32 @@ string Scanner::hexPlusHex(string s1, string s2) {
     return result_ss.str();
 }
 
-int Scanner::countLen_handleNextNewAddress(int kind, string val) {
+int Assembler::countLen_handleNextNewAddress(int kind, string val) {
     if (kind == 1) { //"RESB"
-        newAddressing += stoi(val);
+        locationCounter += stoi(val);
         return stoi(val);
     }
     if (kind == 2) { // "RESW"
-        newAddressing += stoi(val) * 3;
+        locationCounter += stoi(val) * 3;
         return stoi(val) * 3;
     }
-    if (kind == 3) {        // "BYTE" X
-        newAddressing += 3; // hex -> +3
+    if (kind == 3) {          // "BYTE" X
+        locationCounter += 3; // hex -> +3
         return 3;
     }
     if (kind == 4) {
-        newAddressing += 1;
+        locationCounter += 1;
         return 1;
     }
     if (kind == 5) { // "BYTE" C
-        newAddressing += val.size();
+        locationCounter += val.size();
         return val.size();
     }
 }
-void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
+void Assembler::identifyCodeType_ErrorType(vector<string>& vec) {
     midStructure* tmp = new midStructure();
     tmp->line = line;
     string symbol = "", operand = "";
-    // cout << "line: " << line << " ";
     // Pesudo
     if (vec.size() == 3 && (vec[1] == "RESB" || vec[1] == "RESW" ||
                             vec[1] == "BYTE" || vec[1] == "WORD")) {
@@ -293,12 +302,10 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         // label != opcodeName
         if (opcodeTable.count(vec[0])) {
             errorQue.push(errorStructure(line, 1));
-            // cout << line << " error opcode: " << vec[0] << "\n";
             return;
 
         } else if (SymbolTable.count(vec[0])) {
             errorQue.push(errorStructure(line, 8));
-            // cout << "error8 Duplicate Symbol\n";
             return;
         } else {
             symbol = vec[0];
@@ -306,35 +313,29 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         // operand
         // RESB
         if (vec[1] == "RESB") {
-            tmp->loc = newAddressing;
+            tmp->loc = locationCounter;
             if (checkDecimal(vec[2])) {
                 tmp->len = countLen_handleNextNewAddress(1, vec[2]);
                 tmp->codeType = 0;
-                // cout << "[check RESB] ";
-                // return; // 不用insert進中間檔
             } else {
                 errorQue.push(errorStructure(line, 2));
-                // cout << "error2: RESB format (decimal)\n";
                 return;
             }
         }
         // RESW
         else if (vec[1] == "RESW") {
-            tmp->loc = newAddressing;
+            tmp->loc = locationCounter;
             if (checkDecimal(vec[2])) {
                 tmp->len = countLen_handleNextNewAddress(2, vec[2]);
-                // tmp->operand = vec[2];
                 tmp->codeType = 0;
-                // cout << "[check RESW] ";
             } else {
                 errorQue.push(errorStructure(line, 3));
-                // cout << "RESW format error (decimal)\n";
                 return;
             }
         }
         // BYTE
         else if (vec[1] == "BYTE") {
-            tmp->loc = newAddressing;
+            tmp->loc = locationCounter;
             // e.g.:  C'EOF'
             if (vec.size() == 3 && vec[2][0] == 'C' && vec[2][1] == '\'' &&
                 vec[2][vec[2].size() - 1] == '\'') {
@@ -343,13 +344,15 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                     errorQue.push(errorStructure(line, 20));
                     return;
                 }
+                if (vec[2].size() - 3 > 30) {
+                    errorQue.push(errorStructure(line, 2));
+                }
                 for (int j = 2; j < vec[2].size() - 1; j++) {
                     if (!isascii(vec[2][j])) {
-                        errorQue.push(errorStructure(line, 4));
-                        // cout << "pesudo BYTE operand error!(ASCII)\n";
+                        errorQue.push(errorStructure(line, 24));
                         return;
                     } else {
-                        // 強制類型轉換為整數
+                        // 強
                         stringstream hexAscii;
                         // 強制類型轉換為整數
                         int AsciiCode = static_cast<int>(vec[2][j]);
@@ -359,9 +362,8 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                         tmp->codeType = 1;
                     }
                 }
-                // cout << "[check BYTE] ";
                 // handleNextNewAddress
-                newAddressing += operand.size() / 2;
+                locationCounter += operand.size() / 2;
                 tmp->len =
                     operand.size() / 2; // // 因為目前operand是翻成hex的ascii!
             }
@@ -370,6 +372,10 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                      vec[2][vec[2].size() - 1] == '\'') {
                 if (vec[2].size() == 3) {
                     errorQue.push(errorStructure(line, 20));
+                    return;
+                }
+                if (vec[2].size() - 3 > 60) {
+                    errorQue.push(errorStructure(line, 25));
                     return;
                 }
                 // check hex
@@ -395,7 +401,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         }
         // WORD
         else {
-            tmp->loc = newAddressing;
+            tmp->loc = locationCounter;
             // check decimal
             if (checkDecimal(vec[2])) {
                 // operand要轉hex
@@ -407,7 +413,6 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                 return;
             }
         }
-        // cout << "set: " << symbol << " in " << tmp->loc << " ";
         SymbolTable[symbol] = tmp->loc;
 
         // Pesduo -- base
@@ -434,15 +439,15 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
             errorQue.push(errorStructure(line, 15));
             return;
         }
-        startAddr = newAddressing = stoi(vec[2], nullptr, 16); //用10進位存
-        start = true;
+        startAddr = locationCounter = stoi(vec[2], nullptr, 16); //用10進位存
+        isStart = true;
         return;
-    } else if (!start) {
+    } else if (!isStart) {
         errorQue.push(errorStructure(line, 0));
         return;
     }
     // pesudo --END
-    else if (end) {
+    else if (isEnd) {
         errorQue.push(errorStructure(line, 10));
         return;
     } else if (vec.size() != 2 && vec[0] == "END") {
@@ -450,16 +455,23 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         return;
     } else if (vec.size() == 2 && vec[0] == "END") {
         if (SymbolTable.count(vec[1])) {
-            end = true;
+            isEnd = true;
             programStartAddr = SymbolTable[vec[1]];
-            totalLen = newAddressing - startAddr;
+            totalLen = locationCounter - startAddr;
         } else {
             errorQue.push(errorStructure(line, 9));
         }
         return;
     }
     // normal code!!
-    else if (vec.size() == 1) {
+    // C X長度
+
+    else if (vec.size() == 1 || (vec.size() >= 2 && vec[0] == "RSUB")) {
+        // RSUB operand
+        if (vec.size() >= 2 && vec[0] == "RSUB") {
+            errorQue.push(errorStructure(line, 23));
+            return;
+        }
         if (!opcodeTable.count(vec[0])) {
             errorQue.push(errorStructure(line, 12));
             return;
@@ -470,15 +482,33 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         }
         tmp->len = opcodeTable[vec[0]].first;
         tmp->opcode = opcodeTable[vec[0]].second;
-        tmp->loc = newAddressing;
-        newAddressing += 3;
+        tmp->loc = locationCounter;
+        locationCounter += 3;
+    }
+    // 對的label opcode1 ,錯的:opcode1 operand1
+    // 處理formt == 1的opcode
+    else if (vec.size() == 2 &&
+             (vec[1] == "RSUB" ||
+              (opcodeTable.count(vec[0]) && opcodeTable[vec[0]].first == 1) ||
+              (opcodeTable.count(vec[1]) && opcodeTable[vec[1]].first == 1))) {
+        if ((opcodeTable.count(vec[0]) && opcodeTable[vec[0]].first == 1)) {
+            errorQue.push(errorStructure(line, 26));
+            return;
+        }
+        tmp->len = opcodeTable[vec[1]].first;
+        tmp->opcode = opcodeTable[vec[1]].second;
+        tmp->loc = locationCounter;
+        if (vec[1] == "RSUB") {
+            locationCounter += 3;
+        } else
+            locationCounter += 1;
     } else if (vec.size() >= 2 && vec.size() <= 4) {
         int ptr = 0; // 將指向opcode 與operand
         // label
         string possible_opcode = removeFirstChar(vec[0]); // 避免e.g. +LDA A
         if (!opcodeTable.count(vec[0]) && !opcodeTable.count(possible_opcode)) {
             if (!SymbolTable.count(vec[0])) {
-                SymbolTable[vec[0]] = newAddressing;
+                SymbolTable[vec[0]] = locationCounter;
                 ptr = 1;
             } else {
                 errorQue.push(errorStructure(line, 8));
@@ -508,6 +538,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
             tmp->opcode = opcodeTable[vec[ptr]].second;
         }
         ptr += 1;
+
         // 處理operand  (ptr以指向operand的位置了!)
         // STA	DATA, X
         // LDA  DATA
@@ -582,7 +613,6 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
                         tmp->reg.push_back(r1);
                         tmp->reg.push_back(r2);
                     } else {
-                        cout << "regerror1";
                         errorQue.push(errorStructure(line, 22));
                         return;
                     }
@@ -620,11 +650,11 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
         if (tmp->codeType == -1)
             tmp->codeType = 3;
         // handleNewAddr
-        tmp->loc = newAddressing;
-        newAddressing += tmp->len;
+        tmp->loc = locationCounter;
+        locationCounter += tmp->len;
     }
-    // tmp->loc = newAddressing; // wrong 要在handlenewAddr前
     intermediate_file.push_back(tmp);
+    // 印出中間檔
     // cout << "line:" << tmp->line << " ni:" << tmp->ni << " xbpe: " <<
     // tmp->xbpe
     //      << " operand: " << tmp->operand << " regs: ";
@@ -634,7 +664,7 @@ void Scanner::identifyCodeType_ErrorType(vector<string>& vec) {
     // cout << "ctype:" << tmp->codeType << " opcodenum:" << tmp->opcode
     //      << " len:" << tmp->len << " loc:" << tmp->loc << " " << endl;
 }
-void Scanner::firstpass() {
+void Assembler::firstpass() {
     string inputStr;
     ifstream ifs;
     ifs.open(filepath);
@@ -653,11 +683,11 @@ void Scanner::firstpass() {
         // cout << "size: " << vec.size() << endl;
         identifyCodeType_ErrorType(vec);
     }
-    if (!end) {
+    if (!isEnd) {
         errorQue.push(errorStructure(-1, 16));
     }
 }
-string Scanner::handleHexComplement(int n) {
+string Assembler::handleHexComplement(int n) {
     int decimalComplement = ~n + 1;
     string HexString = decimalToHex(decimalComplement);
     string str = "";
@@ -676,7 +706,7 @@ string Scanner::handleHexComplement(int n) {
     paddedString.insert(paddedString.begin(), 3 - str.size(), 'F');
     return paddedString;
 }
-string Scanner::generateObjectProgram(midStructure* tmp) {
+string Assembler::generateObjectCode(midStructure* tmp) {
     string operand = "";
     // 求出ni與xbpe的string
     stringstream s_xbpe, s_ni;
@@ -717,13 +747,18 @@ string Scanner::generateObjectProgram(midStructure* tmp) {
         s_xbpe << hex << tmp->xbpe.to_ulong();
         xbpe = s_xbpe.str();
         if (dispResult == "") { //沒有base
+            // cout << "line:" << tmp->line << "\n";
             errorQue.push(errorStructure(baseLine, 13));
-            // cout << "no base\n";
+            // cout << "line:" << tmp->line << "\n";
             return "";
         }
-        if (dispResult == "-1") {
-            // cout << "disResult-1";
+        if (dispResult == "NOTFINDOPERAND") {
             errorQue.push(errorStructure(tmp->line, 13));
+            return "";
+        }
+        if (dispResult == "OVER") { // over the range of base
+            // cout <<  << "!\n";
+            errorQue.push(errorStructure(tmp->line, 27));
             return "";
         }
         // cout << "(" << padString(2, hexPlusHex(tmp->opcode, ni)) << " " <<
@@ -743,16 +778,14 @@ string Scanner::generateObjectProgram(midStructure* tmp) {
     }
     return padString(2, tmp->opcode) + operand; // not sure format == 1的情況
 }
-string Scanner::handleRelative(midStructure* tmp) {
+string Assembler::handleRelative(midStructure* tmp) {
     if (!SymbolTable.count(tmp->operand)) {
-        return "-1";
+        return "NOTFINDOPERAND";
     }
     int operandAddr = SymbolTable[tmp->operand]; // decimal
     int pc = tmp->loc + tmp->len;
     // PC relative
     int disp = operandAddr - pc;
-    // cout << "\nline:" << tmp->line << " disp of pc-relative: " << operandAddr
-    //      << " - " << pc << " = " << disp << " ";
     if (disp >= 0 && disp <= 2047) {
         tmp->xbpe.set(1);
         return decimalToHex(disp);
@@ -762,21 +795,21 @@ string Scanner::handleRelative(midStructure* tmp) {
         return handleHexComplement(disp);
     }
     // BASE relative
-    if (!base) { //沒有找到base
+    if (!isBase) { //沒有找到base
+        // cout << "not find base\n";
         return "";
     }
+
     disp = operandAddr - baseAddr;
-    // cout << " base-relative: " << operandAddr << " - " << baseAddr << " = "
-    //      << disp << endl;
     if (disp >= 0 && disp <= 4095) {
         tmp->xbpe.set(2);
         return decimalToHex(disp);
+    } else {
+        cout << "disp:!" << disp << endl;
+        return "OVER";
     }
-    // cout << "line:" << tmp->line << " try base fail -> extended\n";
-    // exetened
-    return "0" + decimalToHex(operandAddr);
 }
-void Scanner::combineObjectProgram() {
+void Assembler::generateObjectProgram() {
     ofstream out("output.txt", ios::trunc); // 打開文本文件並清空內容
     if (out.is_open()) {                    // 確認文件是否成功打開
         out << convertToLowerToUpper(
@@ -784,55 +817,49 @@ void Scanner::combineObjectProgram() {
             " " + padString(6, decimalToHex(totalLen)) + "\n");
         //讀中間檔
         int ctr = 0;
-        string aPeiceOfObjectPorgam = " ",
-               objectprogram_Startaddr = decimalToHex(startAddr);
+        string TRecord = " ", _Startaddr = decimalToHex(startAddr);
         for (int i = 0; i < intermediate_file.size(); i++) {
             midStructure* tmp = intermediate_file[i];
 
-            if (ctr + tmp->len >= 30 && aPeiceOfObjectPorgam != "") {
+            if (ctr + tmp->len >= 30 && TRecord != "") {
                 out << convertToLowerToUpper(
-                    "T " + padString(6, objectprogram_Startaddr) + "  " +
-                    padString(2, decimalToHex(ctr)) + "  " +
-                    aPeiceOfObjectPorgam + "\n");
+                    "T " + padString(6, _Startaddr) + "  " +
+                    padString(2, decimalToHex(ctr)) + "  " + TRecord + "\n");
                 ctr = 0;
             }
             if (ctr == 0) {
-                objectprogram_Startaddr = decimalToHex(tmp->loc);
-                aPeiceOfObjectPorgam = "";
+                _Startaddr = decimalToHex(tmp->loc);
+                TRecord = "";
             }
             //遇到RESB、RESW換行 pesudo
             if (tmp->codeType == 0) {
                 // 把還沒輸出完的先印
-                if (aPeiceOfObjectPorgam != "") {
+                if (TRecord != "") {
                     out << convertToLowerToUpper(
-                        "T " + padString(6, objectprogram_Startaddr) + "  " +
-                        padString(2, decimalToHex(ctr)) + "  " +
-                        aPeiceOfObjectPorgam + "\n");
+                        "T " + padString(6, _Startaddr) + "  " +
+                        padString(2, decimalToHex(ctr)) + "  " + TRecord +
+                        "\n");
                     ctr = 0;
-                    aPeiceOfObjectPorgam = "";
+                    TRecord = "";
                 }
-                // cout << "[RESB, RESW] \n";
                 continue;
             }
             // WORD、BYTE
             else if (tmp->codeType == 1) {
                 ctr += tmp->len;
-                aPeiceOfObjectPorgam += tmp->operand + " ";
+                TRecord += tmp->operand + " ";
                 continue;
             } else {
-                string genstring = generateObjectProgram(tmp);
-                // cout << "\n(" << tmp->line
-                //      << ") is a middle line: " << genstring << endl;
-                aPeiceOfObjectPorgam += genstring + " ";
+                string genstring = generateObjectCode(tmp);
+                TRecord += genstring + " ";
                 ctr += tmp->len;
             }
         }
         // leave
-        if (aPeiceOfObjectPorgam != "") {
+        if (TRecord != "") {
             out << convertToLowerToUpper(
-                "T " + padString(6, objectprogram_Startaddr) + "  " +
-                padString(2, decimalToHex(ctr)) + "  " + aPeiceOfObjectPorgam +
-                "\n");
+                "T " + padString(6, _Startaddr) + "  " +
+                padString(2, decimalToHex(ctr)) + "  " + TRecord + "\n");
         }
         out << convertToLowerToUpper(
             "E " + padString(6, decimalToHex(programStartAddr)));
@@ -842,22 +869,20 @@ void Scanner::combineObjectProgram() {
         return;
     }
 }
-void Scanner::secondpass() {
-    // setbaseOperand -> 可以多寫成function 但name要改!
+void Assembler::secondpass() {
     if (SymbolTable.count(baseOperand)) {
         baseAddr = SymbolTable[baseOperand];
-        base = true;
+        isBase = true;
     }
-    combineObjectProgram();
+    generateObjectProgram();
     if (!errorQue.empty()) {
         printErrorQue();
     } else {
-        // cout << endl;
         ifstream in("output.txt");
         if (in.is_open()) {
             string outputLine;
             while (getline(in, outputLine)) { // 逐行讀取文件內容
-                cout << outputLine << endl;   // 打印每一行的內容
+                cout << outputLine << endl;   // 印出每一行的內容
             }
             in.close();
         } else {
@@ -865,7 +890,7 @@ void Scanner::secondpass() {
         }
     }
 }
-void Scanner::func(string filepath) {
+void Assembler::func(string filepath) {
     this->filepath = filepath;
     firstpass();
     secondpass();
@@ -873,7 +898,8 @@ void Scanner::func(string filepath) {
 int main() {
     ifstream ifs;
     string filepath = "test.S";
-    Scanner scanner;
-    scanner.func(filepath);
+    Assembler Assembler;
+    Assembler.func(filepath);
     return 0;
 }
+// 可以進步的是: 用setw()與setfill() 代替 自己寫的padString()

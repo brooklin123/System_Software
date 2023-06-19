@@ -1,5 +1,5 @@
 @startuml
-title 將中間檔組合起來()
+title generateObjectProgram()
 start
 :將H record設好 塞進output.txt裡;
 while (讀取中間檔每一個midStruct) is (no empty)
@@ -21,7 +21,7 @@ while (讀取中間檔每一個midStruct) is (no empty)
     : 累積objectProgram +此midStruct的operand;
   else (其餘)
     : 累積objectProgram長度 += 此midStruct的長度;
-    : 累積objectProgram += generatObjectProgram(midStruct*);
+    : 累積objectProgram += generatObjectCode(midStruct*);
   endif
 endwhile
 :將非空的累積objectProgram塞進output.txt裡;

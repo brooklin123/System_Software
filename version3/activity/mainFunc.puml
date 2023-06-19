@@ -1,5 +1,7 @@
 @startuml
-title func()
+scale 1024 width
+scale 500 height
+title mainFunc()
 start
 :PassOne();
 :PassTwo();

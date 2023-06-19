@@ -1,13 +1,15 @@
 @startuml
 title PassTwo()
+scale 1024 width
+scale 500 height
 start
 :設baseAddr;
-:將中間檔的資訊組合起來();
+:generateObjectProgram();
 
 if(紀錄錯誤的queue非空) then (true)
   :印出錯誤;
 else (false)
-  :印出objectProgram;
+  :印出output.txt內容;
 endif
 stop
 @enduml
